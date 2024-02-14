@@ -2,7 +2,7 @@ import asyncio
 from typing import Any, Dict, Set, Coroutine
 from ..configs.conf import FLUSH_DURATION
 from ..domains.subscribe.subscribe_service import _subscribe_service
-from ..domains.data.data_service import _data_service
+from ..domains.data.user_data_service import _user_data_service
 import logging as log
 
 log.basicConfig(filemode='w', level=log.INFO)
@@ -25,7 +25,7 @@ async def cancel_all_tasks():
 
 
 async def shutdown_services():
-    await _data_service.flush()
+    await _user_data_service.flush()
 
 local_queue = asyncio.Queue()
 
@@ -51,7 +51,7 @@ async def message_consumer(
 async def period_flush():
     while True:
         await asyncio.sleep(FLUSH_DURATION)
-        await _data_service.flush()
+        await _user_data_service.flush()
 
 
 # async def subscribe(sio: AsyncServer, topic: str):
@@ -77,7 +77,7 @@ async def period_flush():
 #             # TODO: 什麼情況下可寫入 DB? 用"至多消費一次"模式
 #             # => RabbitMQ: direct, 或 Kakfa: group
 #             # => 個人訂閱
-#             _data_service.batch_write_items(new_notification)  # 寫入 DB
+#             _user_data_service.batch_write_items(new_notification)  # 寫入 DB
 
 #             # 不要急，慢慢來～～～ 寫完 DB 後才 ack
 #             _subscribe_service.ack(topic, new_notification)
@@ -105,7 +105,7 @@ async def period_flush():
 #         # TODO: 什麼情況下可寫入 DB? 用"至多消費一次"模式
 #         # => RabbitMQ: direct, 或 Kakfa: group
 #         # => 個人訂閱
-#         _data_service.batch_write_items(message)  # 寫入 DB
+#         _user_data_service.batch_write_items(message)  # 寫入 DB
 
 #         # # 不要急，慢慢來～～～ 寫完 DB 後才 ack
 #         # _subscribe_service.ack(topic, message)

@@ -4,7 +4,7 @@ import asyncio
 from socketio import AsyncServer, ASGIApp
 from ...app.tasks import *
 from ...configs.constants import *
-from ...domains.data.data_service import _data_service
+from ...domains.data.user_data_service import _user_data_service
 import logging as log
 
 log.basicConfig(filemode='w', level=log.INFO)
@@ -47,7 +47,7 @@ async def consumer_callback(msg_body):
     # TODO: 什麼情況下可寫入 DB? 用"至多消費一次"模式
     # => RabbitMQ: direct, 或 Kakfa: group
     # => 個人訂閱
-    await _data_service.batch_write_items(msg_body)
+    await _user_data_service.batch_write_items(msg_body)
 
 
 # 即時訊息 (event='receive_msgs')
@@ -79,7 +79,7 @@ async def connect(sid, environ, auth):
     log.info(f'Client connected: {sid}, role_id:{role_id}, {auth}')
 
     # 從 DB 讀取一次性通知  (event='history_msgs')
-    history_msgs = _data_service.get_history_msgs(role_id, role)
+    history_msgs = _user_data_service.get_history_msgs(role_id, role)
     await sio.enter_room(sid, role_id)
     await sio.emit(
         event='history_msgs',
@@ -138,7 +138,7 @@ async def message(sid, payload):
 
     # TODO: 'msg read' process...
     # update msg read status in DB
-    _data_service.msg_read(role_id, role, data)
+    _user_data_service.msg_read(role_id, role, data)
 
     await sio.emit(
         event='receive_msgs',
