@@ -1,7 +1,7 @@
 import os
 import asyncio
 from mangum import Mangum
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from src.infra.socket.socket_server import *
 import logging as log
@@ -64,14 +64,28 @@ async def get_index():
     ''')
 
 
-# @app.websocket('/ws/{room_id}')
-# async def websocket_endpoint(websocket: WebSocket, room_id: str):
-#     await websocket.accept()
-#     await sio.enter_room(websocket, room_id)
-#     log.info('Client connected: {sid}, {environ}, {auth}')
-#     while True:
-#         data = await websocket.receive_json()
-#         await sio.emit('receive_messages', data, room=room_id)
+@app.websocket('/ws/{room_id}')
+async def websocket_endpoint(websocket: WebSocket, room_id: str):
+    # await sio.enter_room(websocket, room_id)
+    # log.info(f'\n\nClient connected: {websocket}')
+    # log.info(f'\n\nwebsocket: {websocket.__dict__}')
+    # log.info(type(websocket))
+    try:
+        await websocket.accept()
+        while True:
+            data = await websocket.receive_json()
+            await websocket.send_json({
+                'data': 'I got you',
+            })
+    except WebSocketDisconnect as e:
+        log.error('我要斷線啦WebSocketDisconnect %s', e)
+        await websocket.close()
+    except Exception as e:
+        log.error('我要斷線啦')
+        # await websocket.close()
+    # finally:
+
+
 
 # @app.websocket('/')
 # async def websocket_endpoint(websocket: WebSocket, room_id: str):
