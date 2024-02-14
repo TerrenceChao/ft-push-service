@@ -55,7 +55,7 @@ class OnlineService:
             await mq_channel.basic_ack(delivery_tag=delivery_tag)
 
         except Exception as e:
-            log.error(f'\nAn error occurred while processing message: \n{e.__str__()}')
+            log.error('\nAn error occurred while processing message: \n %s', e)
             await mq_channel.basic_nack(delivery_tag=delivery_tag, requeue=False)
 
     async def receive_messages(
@@ -97,8 +97,7 @@ class OnlineService:
                         await self.__connect_channel_check(mq_connect, mq_channel)
 
                     except Exception as e:
-                        log.error(
-                            f'An error occurred while subscribing: {e.__str__()}')
+                        log.error('An error occurred while subscribing: %s', e)
                         retry_attempt += 1
                         delay = retry_delay * 2**retry_attempt + \
                             random.uniform(-0.5, 0.5)

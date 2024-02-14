@@ -18,10 +18,10 @@ async def cancel_all_tasks():
                 async_task.cancel()
                 await async_task
         except asyncio.CancelledError as e:
-            log.error(f'shutdown_event error, {e.__str__()}')
+            log.error('shutdown_event error, %s', e)
 
         finally:
-            log.info(f'async task cancelled, {async_task.get_name()}')
+            log.info('async task cancelled, %s', async_task.get_name())
 
 
 local_queue = asyncio.Queue()
@@ -83,7 +83,7 @@ async def shutdown_services():
 #             _online_service.ack(topic, new_notification)
 
 #         except Exception as e:
-#             log.error(f'consume error, {e.__str__()}')
+#             log.error('consume error, %s', e)
 
 
 # async def subscribe_v2(sio: AsyncServer, topic: str):
