@@ -10,6 +10,7 @@ RABBITMQ_URL = os.getenv(
 WORKER_QUEUE = os.getenv("WORKER_QUEUE", "push.worker")
 CONSUME_DURATION = int(os.getenv("CONSUME_DURATION", "20"))  # default 20 secs
 FLUSH_DURATION = int(os.getenv("FLUSH_DURATION", "10"))  # default 10 secs
+MAX_BODY_SIZE = int(os.getenv("MAX_BODY_SIZE", 2 * 1024))  # default 2 KB
 
 # DynamoDB
 LOCAL_DB = "http://localhost:8000"

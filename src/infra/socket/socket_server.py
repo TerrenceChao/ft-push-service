@@ -103,7 +103,7 @@ async def disconnect(sid):
 
 # @sio.on('chat_message')
 # async def chat_message(sid, environ):
-#     print(f'Message from {sid}')
+#     log.info(f'Message from {sid}')
 #     await sio.emit('chat_message', 'hello, how are you', sid)
 
 

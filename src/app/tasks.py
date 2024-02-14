@@ -91,7 +91,7 @@ async def shutdown_services():
 #     await _online_service.consume_task(queue)
 #     while True:
 #         message = await queue.get()
-#         print(f"Received message: {message}")
+#         log.info(f"Received message: {message}")
 #         role_id = '1234567890'
 #         await sio.emit(
 #             event='receive_msgs',

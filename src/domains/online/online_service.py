@@ -13,7 +13,7 @@ log.basicConfig(filemode='w', level=log.INFO)
 class OnlineService:
     def __init__(self):
         self.consumer_tag = str(uuid.uuid4())
-    
+
     async def __connect_channel_check(
         self,
         mq_connect: aiormq.abc.AbstractConnection,
@@ -28,7 +28,35 @@ class OnlineService:
             log.info('RabbitMQ channel is open and active.')
         else:
             raise Exception('RabbitMQ channel is closed or inactive.')
-        
+
+    async def __consumer_callback(
+        self,
+        message: aiormq.abc.DeliveredMessage,
+        mq_channel: aiormq.abc.AbstractChannel,
+        local_queue: asyncio.Queue,
+    ):
+        delivery_tag = message.delivery_tag
+        try:
+            log.info('Received msg: %s', message)
+            msg_body_size = len(message.body)
+            if msg_body_size == 0:
+                log.warning('Received empty message body, skipping...')
+                await mq_channel.basic_nack(delivery_tag=delivery_tag, requeue=False)
+                return
+
+            if msg_body_size > MAX_BODY_SIZE:
+                log.warning('Received message body is too large, skipping...')
+                await mq_channel.basic_nack(delivery_tag=delivery_tag, requeue=False)
+                return
+
+            msg_body = json.loads(message.body.decode())
+            log.info('Received decoded msg body: %s', msg_body)
+            await local_queue.put(msg_body)
+            await mq_channel.basic_ack(delivery_tag=delivery_tag)
+
+        except Exception as e:
+            log.error(f'\nAn error occurred while processing message: \n{e.__str__()}')
+            await mq_channel.basic_nack(delivery_tag=delivery_tag, requeue=False)
 
     async def receive_messages(
         self,
@@ -39,7 +67,7 @@ class OnlineService:
         retry_attempt = 0
         while True:  # 永遠嘗試連線
             if retry_attempt >= max_retry_attempts:
-                print('Max retry attempts reached, waiting before retrying...')
+                log.info('Max retry attempts reached, waiting before retrying...')
                 await asyncio.sleep(retry_delay)
                 retry_attempt = 0  # 重置重試計數器
                 continue
@@ -56,11 +84,7 @@ class OnlineService:
                         await mq_channel.queue_declare(queue=WORKER_QUEUE, durable=True)
 
                         async def callback(message: aiormq.abc.DeliveredMessage):
-                            log.info('Received msg: %s', message)
-                            msg_body = json.loads(message.body.decode())
-                            log.info('Received decoded msg body: %s', msg_body)
-                            await local_queue.put(msg_body)
-                            await mq_channel.basic_ack(delivery_tag=message.delivery_tag)
+                            await self.__consumer_callback(message, mq_channel, local_queue)
 
                         await mq_channel.basic_consume(
                             queue=WORKER_QUEUE,
@@ -73,14 +97,15 @@ class OnlineService:
                         await self.__connect_channel_check(mq_connect, mq_channel)
 
                     except Exception as e:
-                        print(f'An error occurred while subscribing: {e.__str__()}')
+                        log.error(
+                            f'An error occurred while subscribing: {e.__str__()}')
                         retry_attempt += 1
                         delay = retry_delay * 2**retry_attempt + \
                             random.uniform(-0.5, 0.5)
                         log.warning(f'Retrying in {delay} seconds...')
                         await asyncio.sleep(delay)
                         break
-                
+
             finally:
                 log.warn('\n\n\n receive_messages 任務被強迫取消中\n\n\n')
                 await mq_channel.close()

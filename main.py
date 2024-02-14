@@ -85,7 +85,7 @@ async def get_index():
 @app.on_event('shutdown')
 async def shutdown_event():
     # 在这里执行清理操作，比如关闭数据库连接
-    print('\n\n\n\nCleaning up before Lambda shutdown...\n\n\n\n')
+    log.info('\n\nCleaning up before Lambda shutdown...\n\n')
     await cancel_all_tasks()
     await shutdown_services()
 
