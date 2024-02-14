@@ -75,7 +75,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
         while True:
             data = await websocket.receive_json()
             await websocket.send_json({
-                'data': 'I got you',
+                'data': f'I got you, {room_id}',
             })
     except WebSocketDisconnect as e:
         log.error('我要斷線啦WebSocketDisconnect %s', e)
@@ -83,7 +83,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
     except Exception as e:
         log.error('我要斷線啦')
         # await websocket.close()
-    # finally:
+
 
 
 

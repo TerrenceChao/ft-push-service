@@ -5,7 +5,7 @@ import logging as log
 log.basicConfig(filemode='w', level=log.INFO)
 
 
-class OfflineService:
+class DataService:
 
     '''
     TODO: 
@@ -74,4 +74,4 @@ class OfflineService:
         log.info('\n\n\n 將 local memory 的資料寫入 DB \n\n\n')
 
 
-_offline_service = OfflineService()
+_data_service = DataService()

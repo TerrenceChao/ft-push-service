@@ -10,7 +10,7 @@ import logging as log
 log.basicConfig(filemode='w', level=log.INFO)
 
 
-class OnlineService:
+class SubscribeService:
     def __init__(self):
         self.consumer_tag = str(uuid.uuid4())
 
@@ -207,4 +207,4 @@ class OnlineService:
     #         )
 
 
-_online_service = OnlineService()
+_subscribe_service = SubscribeService()
