@@ -11,12 +11,13 @@ provider:
   name: aws
   runtime: python3.8
   region: ${opt:region, "ap-northeast-1"}
-  # apiGateway:
-  #   websocketApiName: ft-push-service
   websocketsApiName: ft-websocket-gateway
   websocketsApiRouteSelectionExpression: $request.body.action # custom routes are selected by the value of the action property in the body
   websocketsDescription: Custom Serverless Websockets
   stage: ${opt:stage, "dev"}
+  logs:
+    websocket: true
+
   iam:
     role:
       statements:
@@ -30,6 +31,11 @@ provider:
         Resource:
         - "arn:aws:apigateway:${self:provider.region}::/apis/*"
         - "arn:aws:execute-api:${self:provider.region}:549734764220:*/*/message"
+      - Effect: Allow
+        Action:
+        - logs:*
+        Resource:
+        - "arn:aws:logs:ap-northeast-1:549734764220:log-group:/aws/lambda/ft-push-service-dev-websocket:*"
         # - Effect: Allow
         #   Action:
         #   - dynamodb:*
@@ -56,7 +62,7 @@ package:
   - "!integration/**"
 
 functions:
-  websocket:
+  my_websocket_server:
     handler: main.handler
     environment:
       STAGE: ${self:provider.stage}
@@ -65,15 +71,21 @@ functions:
     events:
     - websocket: $connect
     - websocket: $disconnect
-    - websocket:
-        route: message
-        # authorizer: aws_iam
     - websocket: $default
       # route: $default
       # routeResponseSelectionExpression: $request.body.action
+    - websocket:
+        route: message
+        # authorizer: aws_iam
+    - http:
+        method: get
+        path: /docs
     - http:
         method: get
         path: /wakeup
+    - http:
+        method: get
+        path: /index
 #    The following are a few example events you can configure
 #    NOTE: Please make sure to change your handler code to work with those events
 #    Check the event documentation for details
