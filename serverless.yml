@@ -1,0 +1,138 @@
+service: ft-push-service
+# app and org for use with dashboard.serverless.com
+app: ft-push-app
+# org: foreign-teacher-org
+
+# You can pin your service to only deploy with a specific Serverless version
+# Check out our docs for more details
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.8
+  region: ${opt:region, "ap-northeast-1"}
+  # apiGateway:
+  #   websocketApiName: ft-push-service
+  websocketsApiName: ft-websocket-gateway
+  websocketsApiRouteSelectionExpression: $request.body.action # custom routes are selected by the value of the action property in the body
+  websocketsDescription: Custom Serverless Websockets
+  stage: ${opt:stage, "dev"}
+  iam:
+    role:
+      statements:
+      - Effect: Allow
+        Action:
+        - apigateway:CreateApi
+        - apigateway:DeleteApi
+        - apigateway:GetApi
+        - apigateway:UpdateApi
+        - apigateway:ManageConnections
+        Resource:
+        - "arn:aws:apigateway:${self:provider.region}::/apis/*"
+        - "arn:aws:execute-api:${self:provider.region}:549734764220:*/*/message"
+        # - Effect: Allow
+        #   Action:
+        #   - dynamodb:*
+        #   Resource:
+        #   - arn:aws:dynamodb:ap-northeast-1:549734764220:table/notifications
+
+
+# you can define service wide environment variables here
+#  environment:
+#    variable1: value1
+
+# you can add packaging information here
+package:
+  patterns:
+  - "!requirements.txt"
+  - "!package.json"
+  - "!package-lock.json"
+  - "!.serverless/**"
+  - "!.venv/**"
+  - "!node_modules/**"
+  - "!__pycache__/**"
+  - "!**/__pycache__/**"
+  - "!test/**"
+  - "!integration/**"
+
+functions:
+  websocket:
+    handler: main.handler
+    environment:
+      STAGE: ${self:provider.stage}
+    # layers:
+    # - {Ref: PythonRequirementsLambdaLayer} ## 導致 size 過大的原因
+    events:
+    - websocket: $connect
+    - websocket: $disconnect
+    - websocket:
+        route: message
+        # authorizer: aws_iam
+    - websocket: $default
+      # route: $default
+      # routeResponseSelectionExpression: $request.body.action
+    - http:
+        method: get
+        path: /wakeup
+#    The following are a few example events you can configure
+#    NOTE: Please make sure to change your handler code to work with those events
+#    Check the event documentation for details
+#    events:
+#      - httpApi:
+#          path: /users/create
+#          method: get
+#      - websocket: $connect
+#      - s3: ${env:BUCKET}
+#      - schedule: rate(10 minutes)
+#      - sns: greeter-topic
+#      - stream: arn:aws:dynamodb:region:XXXXXX:table/foo/stream/1970-01-01T00:00:00.000
+#      - alexaSkill: amzn1.ask.skill.xx-xx-xx-xx
+#      - alexaSmartHome: amzn1.ask.skill.xx-xx-xx-xx
+#      - iot:
+#          sql: "SELECT * FROM 'some_topic'"
+#      - cloudwatchEvent:
+#          event:
+#            source:
+#              - "aws.ec2"
+#            detail-type:
+#              - "EC2 Instance State-change Notification"
+#            detail:
+#              state:
+#                - pending
+#      - cloudwatchLog: '/aws/lambda/hello'
+#      - cognitoUserPool:
+#          pool: MyUserPool
+#          trigger: PreSignUp
+#      - alb:
+#          listenerArn: arn:aws:elasticloadbalancing:us-east-1:XXXXXX:listener/app/my-load-balancer/50dc6c495c0c9188/
+#          priority: 1
+#          conditions:
+#            host: example.com
+#            path: /hello
+
+#    Define function environment variables here
+#    environment:
+#      variable2: value2
+
+# you can add CloudFormation resource templates here
+resources:
+  Resources:
+    WebsocketApi:
+      Type: AWS::ApiGatewayV2::Api
+      Properties:
+        Name: ${self:provider.websocketsApiName}
+        ProtocolType: WEBSOCKET
+        RouteSelectionExpression: $request.body.action
+#resources:
+#  Resources:
+#    NewResource:
+#      Type: AWS::S3::Bucket
+#      Properties:
+#        BucketName: my-new-bucket
+#  Outputs:
+#     NewOutput:
+#       Description: "Description for the output"
+#       Value: "Some output value"
+
+plugins:
+- serverless-python-requirements
