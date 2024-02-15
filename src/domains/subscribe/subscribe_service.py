@@ -65,6 +65,10 @@ class SubscribeService:
         retry_delay = 1
         max_retry_attempts = 5
         retry_attempt = 0
+
+        async def callback(message: aiormq.abc.DeliveredMessage):
+            await self.__consumer_callback(message, mq_channel, local_queue)
+
         while True:  # 永遠嘗試連線
             if retry_attempt >= max_retry_attempts:
                 log.info('Max retry attempts reached, waiting before retrying...')
@@ -74,18 +78,16 @@ class SubscribeService:
             try:
                 mq_connect: aiormq.abc.AbstractConnection = \
                     await aiormq.connect(RABBITMQ_URL)
+                log.info('receive_messages: connected to RabbitMQ')
+
                 mq_channel: aiormq.abc.AbstractChannel = \
                     await mq_connect.channel()
-                log.info('receive_messages: connected to RabbitMQ')
+                await mq_channel.basic_qos(prefetch_count=PREFETCH_SIZE)
+                await mq_channel.queue_declare(queue=WORKER_QUEUE, durable=True)
+                log.info('receive_messages: declared queue')
 
                 while True:
                     try:
-                        await mq_channel.basic_qos(prefetch_count=PREFETCH_SIZE)
-                        await mq_channel.queue_declare(queue=WORKER_QUEUE, durable=True)
-
-                        async def callback(message: aiormq.abc.DeliveredMessage):
-                            await self.__consumer_callback(message, mq_channel, local_queue)
-
                         await mq_channel.basic_consume(
                             queue=WORKER_QUEUE,
                             consumer_callback=callback,
