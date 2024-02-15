@@ -1,7 +1,7 @@
 import os
 
 LOCAL_REGION = os.getenv("LOCAL_REGION", "ap-northeast-1")
-
+WS_JSON_MODE = os.getenv("WS_JSON_MODE", "text") # text or binary
 
 # message queue
 # RabbitMQ

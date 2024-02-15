@@ -3,6 +3,8 @@ import asyncio
 from mangum import Mangum
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
+from src.domains.data.user_data_service import _user_data_service
+from src.domains.message.connection_manager import _connection_manager
 from src.infra.socket.socket_server import *
 import logging as log
 
@@ -64,36 +66,46 @@ async def get_index():
     ''')
 
 
-@app.websocket('/ws/{room_id}')
-async def websocket_endpoint(websocket: WebSocket, room_id: str):
-    # await sio.enter_room(websocket, room_id)
-    # log.info(f'\n\nClient connected: {websocket}')
-    # log.info(f'\n\nwebsocket: {websocket.__dict__}')
-    # log.info(type(websocket))
+@app.websocket('/message/{role}/{role_id}')
+async def websocket_endpoint(
+    role: str,
+    role_id: int,
+    websocket: WebSocket,
+):
+    room_id = f'{role}:{role_id}'
     try:
-        await websocket.accept()
+        await _connection_manager.connect(room_id, websocket)
+        # verify user (check jwt)
+        # data = await websocket.receive_json()
+        history_msgs = \
+            await _user_data_service.get_history_msgs(role, role_id)
+        await _connection_manager.send_json(
+            room_id, 
+            {
+                'msg': f'Welcome! {role_id}',
+                'notify': history_msgs,  # read from DB
+                'mode': 'off-line (read from db)',
+            }
+        )
+
         while True:
             data = await websocket.receive_json()
-            await websocket.send_json({
-                'data': f'I got you, {room_id}',
-            })
+            if data.pop('action') == 'read':
+                await _user_data_service.msg_read(role_id, role, data)
+                await _connection_manager.send_json(
+                    room_id,
+                    {
+                        'msg': f'Msg: [???] read by {role_id}',
+                        'data': data.get('payload', None),
+                        'mode': 'on-line (real-time msg, db ack)',
+                    }
+                )
+            # if ... then ...
+            # if ... then ...
+
     except WebSocketDisconnect as e:
-        log.error('我要斷線啦WebSocketDisconnect %s', e)
-        await websocket.close()
-    except Exception as e:
-        log.error('我要斷線啦')
-        # await websocket.close()
-
-
-
-
-# @app.websocket('/')
-# async def websocket_endpoint(websocket: WebSocket, room_id: str):
-#     await websocket.accept()
-#     await sio.enter_room(websocket, room_id)
-#     while True:
-#         data = await websocket.receive_text()
-#         await sio.emit('chat_message', data, room=room_id)
+        log.error('我要斷線啦 WebSocketDisconnect %s', e)
+        _connection_manager.disconnect(room_id, websocket)
 
 
 @app.on_event('shutdown')
