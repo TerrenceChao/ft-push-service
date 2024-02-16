@@ -16,15 +16,14 @@ class UserDataService:
     2. 將 local memory 的資料 "定期" 寫入 DB
     3. local memory "超過一定數量" 時, 也要寫入 DB
     '''
-
     async def batch_write_items(self, item: Any):
         log.info(f'\n\nbatch write item: {item}\n\n')
         await asyncio.sleep(5)
-        
+
         # 如果 local memory 超過一定數量, 就寫入 DB
         await self.flush()
 
-    def get_history_msgs(self, role_id: int, role: str):
+    async def get_history_msgs(self, role: str, role_id: int):
         return [
             {
                 'title': 'Teacher Eva apply for a job',
@@ -63,8 +62,8 @@ class UserDataService:
                 'read': False,
             }
         ]
-    
-    def msg_read(self, role_id: int, role: str, data: Dict):
+
+    async def msg_read(self, role: str, role_id: int, data: Dict):
         log.info(f'role_id: {role_id}, msg read: True, data: {data}')
 
     '''

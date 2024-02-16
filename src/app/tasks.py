@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Dict, Set, Coroutine
+from typing import Set, Coroutine
 from ..configs.conf import FLUSH_DURATION
 from ..domains.subscribe.subscribe_service import _subscribe_service
 from ..domains.message.connection_manager import _connection_manager
@@ -73,60 +73,3 @@ async def user_message_consumer(
         local_queue,
         _user_msg_service.message_consumer,
     )
-
-
-# async def subscribe(sio: AsyncServer, topic: str):
-#     while True:
-#         await asyncio.sleep(2)  # 每隔 N 秒执行一次，模拟定时任务
-#         # 这里编写获取新通知的逻辑
-#         # FIXME: 这里的 new_notification 可能有很多?
-#         try:
-#             role_id, new_notification = _subscribe_service.consume(topic)
-#             await sio.emit(
-#                 event='receive_msgs',
-#                 data={
-#                     'msg': f'Welcome! {role_id}',
-#                     'notify': [new_notification],
-#                     'mode': 'on-line (real-time msg from message queue)',
-#                 },
-#                 room=role_id,  # 为新通知所在的房间
-#             )
-#             # TODO: 千萬別在"廣播"模式下寫入 DB, 會有很多重複的操作!!!
-#             # => RabbitMQ: fanout, 或 Kakfa: no group
-#             # => 廣播
-
-#             # TODO: 什麼情況下可寫入 DB? 用"至多消費一次"模式
-#             # => RabbitMQ: direct, 或 Kakfa: group
-#             # => 個人訂閱
-#             _user_data_service.batch_write_items(new_notification)  # 寫入 DB
-
-#             # 不要急，慢慢來～～～ 寫完 DB 後才 ack
-#             _subscribe_service.ack(topic, new_notification)
-
-#         except Exception as e:
-#             log.error('consume error, %s', e)
-
-
-# async def subscribe_v2(sio: AsyncServer, topic: str):
-#     queue = asyncio.Queue()
-#     await _subscribe_service.consume_task(queue)
-#     while True:
-#         message = await queue.get()
-#         log.info(f"Received message: {message}")
-#         role_id = '1234567890'
-#         await sio.emit(
-#             event='receive_msgs',
-#             data={
-#                 'msg': f'Welcome! {role_id}',
-#                 'notify': [message],
-#                 'mode': 'on-line (real-time msg from message queue)',
-#             },
-#             room=role_id,  # 为新通知所在的房间
-#         )
-#         # TODO: 什麼情況下可寫入 DB? 用"至多消費一次"模式
-#         # => RabbitMQ: direct, 或 Kakfa: group
-#         # => 個人訂閱
-#         _user_data_service.batch_write_items(message)  # 寫入 DB
-
-#         # # 不要急，慢慢來～～～ 寫完 DB 後才 ack
-#         # _subscribe_service.ack(topic, message)

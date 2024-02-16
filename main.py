@@ -28,7 +28,8 @@ app = FastAPI(
 # router_v1.include_router(ws.router)
 
 # websocket 以此種方式註冊有效
-app.include_router(ws.router, prefix='/push/api/v1')
+PREFIX_V1 = '/push/api/v1'
+app.include_router(ws.router, prefix=PREFIX_V1)
 
 
 @app.on_event('startup')
