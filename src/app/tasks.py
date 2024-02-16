@@ -2,7 +2,9 @@ import asyncio
 from typing import Any, Dict, Set, Coroutine
 from ..configs.conf import FLUSH_DURATION
 from ..domains.subscribe.subscribe_service import _subscribe_service
+from ..domains.message.connection_manager import _connection_manager
 from ..domains.data.user_data_service import _user_data_service
+from .user_message_service import UserMessageService
 import logging as log
 
 log.basicConfig(filemode='w', level=log.INFO)
@@ -27,17 +29,26 @@ async def cancel_all_tasks():
 async def shutdown_services():
     await _user_data_service.flush()
 
+
 local_queue = asyncio.Queue()
 
 
+# 即時訊息 (event='receive_msgs')
 async def subscribe_messages(local_queue: asyncio.Queue):
     while True:
         await _subscribe_service.receive_messages(
             local_queue,
         )
-        log.info('subscribe_messages done!')
 
 
+# 定期將 local memory 的資料寫入 DB
+async def period_flush():
+    while True:
+        await asyncio.sleep(FLUSH_DURATION)
+        await _user_data_service.flush()
+
+
+# 訊息消費者
 async def message_consumer(
     local_queue: asyncio.Queue,
     consumer_callback: Coroutine,
@@ -48,10 +59,20 @@ async def message_consumer(
         local_queue.task_done()
 
 
-async def period_flush():
-    while True:
-        await asyncio.sleep(FLUSH_DURATION)
-        await _user_data_service.flush()
+_user_msg_service = UserMessageService(
+    _connection_manager,
+    _user_data_service
+)
+
+
+# 個人訊息消費者
+async def user_message_consumer(
+    local_queue: asyncio.Queue
+):
+    await message_consumer(
+        local_queue,
+        _user_msg_service.message_consumer,
+    )
 
 
 # async def subscribe(sio: AsyncServer, topic: str):

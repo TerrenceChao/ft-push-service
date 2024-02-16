@@ -1,15 +1,7 @@
 import os
 import asyncio
 from mangum import Mangum
-from fastapi import (
-    FastAPI,
-    APIRouter,
-    WebSocket, 
-    WebSocketDisconnect,
-)
-from fastapi.responses import HTMLResponse, JSONResponse
-from src.domains.data.user_data_service import _user_data_service
-from src.domains.message.connection_manager import _connection_manager
+from fastapi import FastAPI
 from src.routers.v1 import ws
 from src.app.tasks import *
 import logging as log
@@ -37,91 +29,6 @@ app = FastAPI(
 
 # websocket 以此種方式註冊有效
 app.include_router(ws.router, prefix='/push/api/v1')
-
-
-@app.get('/wakeup')
-async def wakeup():
-    return JSONResponse(
-        content={'msg': 'triggered'},
-        status_code=200,
-    )
-
-# 定义一个 FastAPI 路由，用于返回包含 HTML 页面的响应
-
-
-@app.get('/index')
-async def get_index():
-    return HTMLResponse('''
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <title>Socket.IO Test</title>
-                <script src='https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js'></script>
-                <script>
-                    var socket = io('ws://localhost:8088/sockets');
-                    socket.on('connect', function(sid, environ, auth) {
-                        console.log('Connected');
-                    });
-                    socket.on('disconnect', function(sid) {
-                        console.log('Disconnected');
-                    });
-                    function sendMessage() {
-                        var message = document.getElementById('message').value;
-                        socket.emit('chat_message', message);
-                    }
-                </script>
-            </head>
-            <body>
-                <h1>Socket.IO Test</h1>
-                <input type='text' id='message' placeholder='Enter message'>
-                <button onclick='sendMessage()'>Send Message</button>
-            </body>
-        </html>
-    ''')
-
-
-@app.websocket('/message/{role}/{role_id}')
-async def websocket_endpoint(
-    role: str,
-    role_id: int,
-    websocket: WebSocket,
-):
-    room_id = f'{role}:{role_id}'
-    try:
-        await _connection_manager.connect(room_id, websocket)
-        # verify user (check jwt)
-        # data = await websocket.receive_json()
-        history_msgs = \
-            await _user_data_service.get_history_msgs(role, role_id)
-        await _connection_manager.send_json(
-            {
-                'msg': f'Welcome! {role_id}',
-                'notify': history_msgs,  # read from DB
-                'mode': 'off-line (read from db)',
-            },
-            room_id,
-            websocket,
-        )
-
-        while True:
-            data = await _connection_manager.receive_json(websocket)
-            if data.pop('action', None) == 'read':
-                await _user_data_service.msg_read(role_id, role, data)
-                await _connection_manager.send_json(
-                    {
-                        'msg': f'Msg: [???] read by {role_id}',
-                        'data': data.get('payload', None),
-                        'mode': 'on-line (real-time msg, db ack)',
-                    },
-                    room_id,
-                    websocket,
-                )
-            # if ... then ...
-            # if ... then ...
-
-    except WebSocketDisconnect as e:
-        log.error('我要斷線啦 WebSocketDisconnect %s', e)
-        _connection_manager.disconnect(websocket)
 
 
 @app.on_event('startup')
