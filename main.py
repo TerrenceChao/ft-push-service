@@ -1,11 +1,17 @@
 import os
 import asyncio
 from mangum import Mangum
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    APIRouter,
+    WebSocket, 
+    WebSocketDisconnect,
+)
 from fastapi.responses import HTMLResponse, JSONResponse
 from src.domains.data.user_data_service import _user_data_service
 from src.domains.message.connection_manager import _connection_manager
-from src.infra.socket.socket_server import *
+from src.routers.v1 import ws
+from src.app.tasks import *
 import logging as log
 
 log.basicConfig(filemode='w', level=log.INFO)
@@ -16,6 +22,7 @@ app = FastAPI(
     title='ForeignTeacher: Push Service',
     root_path=root_path,
 )
+
 # app.add_middleware(
 #     CORSMiddleware,
 #     allow_origins=['*'],
@@ -23,6 +30,13 @@ app = FastAPI(
 #     allow_methods=['*'],
 #     allow_headers=['*'],
 # )
+
+# websocket 以此種方式註冊無效
+# router_v1 = APIRouter(prefix="/push/api/v1")
+# router_v1.include_router(ws.router)
+
+# websocket 以此種方式註冊有效
+app.include_router(ws.router, prefix='/push/api/v1')
 
 
 @app.get('/wakeup')
@@ -80,32 +94,55 @@ async def websocket_endpoint(
         history_msgs = \
             await _user_data_service.get_history_msgs(role, role_id)
         await _connection_manager.send_json(
-            room_id, 
             {
                 'msg': f'Welcome! {role_id}',
                 'notify': history_msgs,  # read from DB
                 'mode': 'off-line (read from db)',
-            }
+            },
+            room_id,
+            websocket,
         )
 
         while True:
-            data = await websocket.receive_json()
-            if data.pop('action') == 'read':
+            data = await _connection_manager.receive_json(websocket)
+            if data.pop('action', None) == 'read':
                 await _user_data_service.msg_read(role_id, role, data)
                 await _connection_manager.send_json(
-                    room_id,
                     {
                         'msg': f'Msg: [???] read by {role_id}',
                         'data': data.get('payload', None),
                         'mode': 'on-line (real-time msg, db ack)',
-                    }
+                    },
+                    room_id,
+                    websocket,
                 )
             # if ... then ...
             # if ... then ...
 
     except WebSocketDisconnect as e:
         log.error('我要斷線啦 WebSocketDisconnect %s', e)
-        _connection_manager.disconnect(room_id, websocket)
+        _connection_manager.disconnect(websocket)
+
+
+@app.on_event('startup')
+async def startup_event():
+    subscribe_task = asyncio.create_task(
+        subscribe_messages(local_queue)
+    )
+    subscribe_task.set_name('subscribe_task')
+    created_async_tasks.add(subscribe_task)
+
+    period_flush_task = asyncio.create_task(
+        period_flush()
+    )
+    period_flush_task.set_name('period_flush_task')
+    created_async_tasks.add(period_flush_task)
+
+    user_msg_consumer_task = asyncio.create_task(
+        user_message_consumer(local_queue)
+    )
+    user_msg_consumer_task.set_name('user_msg_consumer_task')
+    created_async_tasks.add(user_msg_consumer_task)
 
 
 @app.on_event('shutdown')
@@ -115,10 +152,5 @@ async def shutdown_event():
     await cancel_all_tasks()
     await shutdown_services()
 
-
-mount_path = '/'
-app.mount(mount_path, sio_app)
-app.add_route(mount_path, route=sio_app, methods=['GET', 'POST'])
-app.add_websocket_route(mount_path, sio_app)
 
 handler = Mangum(app)
