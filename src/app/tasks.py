@@ -1,7 +1,7 @@
 import asyncio
 from typing import Set, Coroutine
 from ..configs.conf import *
-from ..domains.subscribe.subscribe_service import _subscribe_service
+from ..domains.subscribe.subscribe_service import SubscribeService
 from ..domains.message.connection_manager import _connection_manager
 from ..domains.data.user_data_service import _user_data_service
 from .user_message_service import UserMessageService
@@ -13,11 +13,13 @@ log.basicConfig(filemode='w', level=log.INFO)
 local_broadcast_queue = asyncio.Queue()
 local_unicast_queue = asyncio.Queue()
 
+broadcast_subscriber = SubscribeService()
+unicast_subscriber = SubscribeService()
 
 # 訂閱者-廣播訊息 (event='receive_msgs')
 async def subscribe_broadcast_messages():
     while True:
-        await _subscribe_service.receive_messages(
+        await broadcast_subscriber.receive_messages(
             local_broadcast_queue,
             BROADCAST_QUEUE,
         )
@@ -26,7 +28,7 @@ async def subscribe_broadcast_messages():
 # 訂閱者-單播訊息 (event='receive_msgs')
 async def subscribe_unicast_messages():
     while True:
-        await _subscribe_service.receive_messages(
+        await unicast_subscriber.receive_messages(
             local_unicast_queue,
             UNICAST_QUEUE,
         )

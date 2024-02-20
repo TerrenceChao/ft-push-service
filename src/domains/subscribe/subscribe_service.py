@@ -81,16 +81,18 @@ class SubscribeService:
                 continue
             try:
                 mq_connect = await aiormq.connect(RABBITMQ_URL)
-                log.info('receive_messages: connected to RabbitMQ')
+                log.info(
+                    f'receive_messages: connected to RabbitMQ. queue: {queue_name}')
 
                 mq_channel = await mq_connect.channel()
                 await mq_channel.basic_qos(prefetch_count=PREFETCH_SIZE)
-                await mq_channel.queue_declare(queue=BROADCAST_QUEUE, durable=True)
-                log.info('receive_messages: declared queue')
+                await mq_channel.queue_declare(queue=queue_name, durable=True)
+                log.info(f'receive_messages: declared queue: {queue_name}')
 
                 async def callback(message: aiormq.abc.DeliveredMessage):
                     if mq_channel is None:
-                        raise Exception('RabbitMQ channel is None.')
+                        raise Exception(
+                            f'RabbitMQ channel is None. queue: {queue_name}')
 
                     await self.__consumer_callback(message, mq_channel, local_queue)
 
@@ -107,20 +109,20 @@ class SubscribeService:
                         await self.__connect_channel_check(mq_connect, mq_channel)
 
                     except Exception as e:
-                        log.error('An error occurred while subscribing: %s', e)
+                        log.error(
+                            'An error occurred while subscribing: %s, %s', queue_name, e)
                         retry_attempt += 1
                         delay = retry_delay * 2**retry_attempt + \
                             random.uniform(-0.5, 0.5)
-                        log.warning(f'Retrying in {delay} seconds...')
+                        log.warning(
+                            f'Retrying in {delay} seconds...  queue: {queue_name}')
                         await asyncio.sleep(delay)
                         break
 
             finally:
-                log.warn('\n\n\n receive_messages 任務被強迫取消中\n\n\n')
+                log.warn(
+                    f'\n\n\n receive_messages 任務被強迫取消中 queue: {queue_name}\n\n\n')
                 if mq_channel != None:
                     await mq_channel.close()
                 if mq_connect != None:
                     await mq_connect.close()
-
-
-_subscribe_service = SubscribeService()

@@ -53,27 +53,27 @@ async def websocket_endpoint(
 @app.on_event('startup')
 async def startup_event():
     async_task(
-        subscribe_broadcast_messages(),
+        subscribe_broadcast_messages,
         'sub_broadcast_task',
     )
     
     async_task(
-        subscribe_unicast_messages(),
+        subscribe_unicast_messages,
         'sub_unicast_task',
     )
 
     async_task(
-        period_flush(),
+        period_flush,
         'period_flush_task',
     )
 
     async_task(
-        broadcast_message_consumer(),
+        broadcast_message_consumer,
         'broadcast_task',
     )
     
     async_task(
-        unicast_message_consumer(),
+        unicast_message_consumer,
         'unicast_task',
     )
 
