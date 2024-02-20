@@ -19,6 +19,9 @@ class SubscribeService:
         mq_connect: aiormq.abc.AbstractConnection,
         mq_channel: aiormq.abc.AbstractChannel,
     ):
+        if mq_connect is None or mq_channel is None:
+            raise Exception('RabbitMQ connection or channel is None.')
+
         if not mq_connect.is_closed:
             log.info('RabbitMQ connection is open.')
         else:
@@ -60,14 +63,15 @@ class SubscribeService:
 
     async def receive_messages(
         self,
-        local_queue: asyncio.Queue
+        local_queue: asyncio.Queue,
+        queue_name: str,
     ):
+        mq_connect: aiormq.abc.AbstractConnection = None
+        mq_channel: aiormq.abc.AbstractChannel = None
+
         retry_delay = 1
         max_retry_attempts = 5
         retry_attempt = 0
-
-        async def callback(message: aiormq.abc.DeliveredMessage):
-            await self.__consumer_callback(message, mq_channel, local_queue)
 
         while True:  # 永遠嘗試連線
             if retry_attempt >= max_retry_attempts:
@@ -76,20 +80,24 @@ class SubscribeService:
                 retry_attempt = 0  # 重置重試計數器
                 continue
             try:
-                mq_connect: aiormq.abc.AbstractConnection = \
-                    await aiormq.connect(RABBITMQ_URL)
+                mq_connect = await aiormq.connect(RABBITMQ_URL)
                 log.info('receive_messages: connected to RabbitMQ')
 
-                mq_channel: aiormq.abc.AbstractChannel = \
-                    await mq_connect.channel()
+                mq_channel = await mq_connect.channel()
                 await mq_channel.basic_qos(prefetch_count=PREFETCH_SIZE)
-                await mq_channel.queue_declare(queue=WORKER_QUEUE, durable=True)
+                await mq_channel.queue_declare(queue=BROADCAST_QUEUE, durable=True)
                 log.info('receive_messages: declared queue')
+
+                async def callback(message: aiormq.abc.DeliveredMessage):
+                    if mq_channel is None:
+                        raise Exception('RabbitMQ channel is None.')
+
+                    await self.__consumer_callback(message, mq_channel, local_queue)
 
                 while True:
                     try:
                         await mq_channel.basic_consume(
-                            queue=WORKER_QUEUE,
+                            queue=BROADCAST_QUEUE,
                             consumer_callback=callback,
                             no_ack=False,
                             consumer_tag=self.consumer_tag,
@@ -109,13 +117,10 @@ class SubscribeService:
 
             finally:
                 log.warn('\n\n\n receive_messages 任務被強迫取消中\n\n\n')
-                await mq_channel.close()
-                await mq_connect.close()
-                random_delay = random.uniform(0.5, 2.5)
-                await asyncio.sleep(random_delay)
-
-        # 关闭连接
-        # await mq_channel.close()
+                if mq_channel != None:
+                    await mq_channel.close()
+                if mq_connect != None:
+                    await mq_connect.close()
 
 
 _subscribe_service = SubscribeService()

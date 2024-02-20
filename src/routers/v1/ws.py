@@ -7,7 +7,7 @@ from fastapi import (
 from fastapi.responses import HTMLResponse, JSONResponse
 from src.configs.constants import *
 from src.domains.data.models import *
-from src.app.tasks import _user_msg_service
+from src.app.tasks import user_msg_service
 from ..req.validation import websocket_endpoint_check
 import logging as log
 
@@ -61,16 +61,16 @@ async def get_index():
     ''')
 
 
-@router.websocket('/ws/{role}/{role_id}')
-async def websocket_endpoint(
-    websocket: WebSocket,
-    user: UserDTO = Depends(websocket_endpoint_check),
-):
-    try:
-        await _user_msg_service.connect(user, websocket)
-        while True:
-            await _user_msg_service.messaging(user, websocket)
+# @router.websocket('/ws/{role}/{role_id}')
+# async def websocket_endpoint(
+#     websocket: WebSocket,
+#     user: UserDTO = Depends(websocket_endpoint_check),
+# ):
+#     try:
+#         await user_msg_service.connect(user, websocket)
+#         while True:
+#             await user_msg_service.messaging(user, websocket)
 
-    except WebSocketDisconnect as e:
-        log.error('我要斷線啦 WebSocketDisconnect %s', e)
-        _user_msg_service.disconnect(websocket)
+#     except WebSocketDisconnect as e:
+#         log.error('我要斷線啦 WebSocketDisconnect %s', e)
+#         user_msg_service.disconnect(websocket)

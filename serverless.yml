@@ -21,16 +21,16 @@ provider:
   iam:
     role:
       statements:
-      - Effect: Allow
-        Action:
-        - apigateway:CreateApi
-        - apigateway:DeleteApi
-        - apigateway:GetApi
-        - apigateway:UpdateApi
-        - apigateway:ManageConnections
-        Resource:
-        - "arn:aws:apigateway:${self:provider.region}::/apis/*"
-        - "arn:aws:execute-api:${self:provider.region}:549734764220:*/*/message"
+      # - Effect: Allow
+      #   Action:
+      #   - apigateway:CreateApi
+      #   - apigateway:DeleteApi
+      #   - apigateway:GetApi
+      #   - apigateway:UpdateApi
+      #   - apigateway:ManageConnections
+      #   Resource:
+      #   - "arn:aws:apigateway:${self:provider.region}::/apis/*"
+      #   - "arn:aws:execute-api:${self:provider.region}:549734764220:*/*/message"
       - Effect: Allow
         Action:
         - logs:*

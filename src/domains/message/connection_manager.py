@@ -39,7 +39,7 @@ class ConnectionManager:
         self.lock = asyncio.Lock()
 
     async def connect(self, room_id: str, websocket: WebSocket):
-        await websocket.accept()
+        # await websocket.accept()
         self.__connect(room_id, websocket)
         if not (room_id in self.rooms.keys()):
             self.rooms[room_id] = set()

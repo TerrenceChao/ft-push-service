@@ -35,7 +35,7 @@ class UserDataService:
                     'title': 'Job Title',
                 },
                 'category': 'notification',
-                'read': False,
+                # 'read': False,
             },
             {
                 'title': 'Teacher Gary apply for a job',
@@ -47,7 +47,7 @@ class UserDataService:
                     'title': 'Job Title 22',
                 },
                 'category': 'notification',
-                'read': True,
+                # 'read': True,
             },
             {
                 'title': 'Teacher John apply for a job',
@@ -59,12 +59,12 @@ class UserDataService:
                     'title': 'Job Title 333',
                 },
                 'category': 'notification',
-                'read': False,
+                # 'read': False,
             }
         ]
 
-    async def msg_read(self, role: str, role_id: int, data: Dict):
-        log.info(f'role_id: {role_id}, msg read: True, data: {data}')
+    # async def msg_read(self, role: str, role_id: int, data: Dict):
+    #     log.info(f'role_id: {role_id}, msg read: True, data: {data}')
 
     '''
     TODO: 當 Lambda 被關閉時，將 local memory 的資料寫入 DB

@@ -1,6 +1,6 @@
 import asyncio
 from typing import Set, Coroutine
-from ..configs.conf import FLUSH_DURATION
+from ..configs.conf import *
 from ..domains.subscribe.subscribe_service import _subscribe_service
 from ..domains.message.connection_manager import _connection_manager
 from ..domains.data.user_data_service import _user_data_service
@@ -10,34 +10,25 @@ import logging as log
 log.basicConfig(filemode='w', level=log.INFO)
 
 
-created_async_tasks: Set[asyncio.Task] = set()
+local_broadcast_queue = asyncio.Queue()
+local_unicast_queue = asyncio.Queue()
 
 
-async def cancel_all_tasks():
-    for async_task in created_async_tasks:
-        try:
-            if not async_task.cancelled():
-                async_task.cancel()
-                await async_task
-        except asyncio.CancelledError as e:
-            log.error('shutdown_event error, %s', e)
-
-        finally:
-            log.info('async task cancelled, %s', async_task.get_name())
-
-
-async def shutdown_services():
-    await _user_data_service.flush()
-
-
-local_queue = asyncio.Queue()
-
-
-# 即時訊息 (event='receive_msgs')
-async def subscribe_messages(local_queue: asyncio.Queue):
+# 訂閱者-廣播訊息 (event='receive_msgs')
+async def subscribe_broadcast_messages():
     while True:
         await _subscribe_service.receive_messages(
-            local_queue,
+            local_broadcast_queue,
+            BROADCAST_QUEUE,
+        )
+
+
+# 訂閱者-單播訊息 (event='receive_msgs')
+async def subscribe_unicast_messages():
+    while True:
+        await _subscribe_service.receive_messages(
+            local_unicast_queue,
+            UNICAST_QUEUE,
         )
 
 
@@ -48,7 +39,7 @@ async def period_flush():
         await _user_data_service.flush()
 
 
-# 訊息消費者
+# 消費者
 async def message_consumer(
     local_queue: asyncio.Queue,
     consumer_callback: Coroutine,
@@ -59,17 +50,51 @@ async def message_consumer(
         local_queue.task_done()
 
 
-_user_msg_service = UserMessageService(
+user_msg_service = UserMessageService(
     _connection_manager,
     _user_data_service
 )
 
 
-# 個人訊息消費者
-async def user_message_consumer(
-    local_queue: asyncio.Queue
-):
+# 消費者-廣播訊息 給相同訂閱頻道的所有用戶
+async def broadcast_message_consumer():
     await message_consumer(
-        local_queue,
-        _user_msg_service.message_consumer,
+        local_broadcast_queue,
+        user_msg_service.broadcast_message,
     )
+
+
+# 消費者-單播訊息 短期儲存用戶訊息
+async def unicast_message_consumer():
+    await message_consumer(
+        local_unicast_queue,
+        user_msg_service.short_term_storage_of_data,
+    )
+
+
+created_async_tasks: Set[asyncio.Task] = set()
+
+
+def async_task(task: Coroutine, task_name: str):
+    task: asyncio.Task = asyncio.create_task(
+        task()
+    )
+    task.set_name(task_name)
+    created_async_tasks.add(task)
+
+
+async def cancel_all_tasks():
+    for async_task in created_async_tasks:
+        try:
+            if not async_task.cancelled():
+                async_task.cancel()
+                await async_task
+        except asyncio.CancelledError as e:
+            log.error('async_task_cancelled error, %s', e)
+
+        finally:
+            log.info('async_task_cancelled, %s', async_task.get_name())
+
+
+async def shutdown_services():
+    await _user_data_service.flush()

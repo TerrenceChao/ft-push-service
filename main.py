@@ -1,7 +1,11 @@
 import os
 import asyncio
 from mangum import Mangum
-from fastapi import FastAPI
+from fastapi import (
+    FastAPI,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from src.routers.v1 import ws
 from src.app.tasks import *
 import logging as log
@@ -28,29 +32,50 @@ app = FastAPI(
 # router_v1.include_router(ws.router)
 
 # websocket 以此種方式註冊有效
-PREFIX_V1 = '/push/api/v1'
-app.include_router(ws.router, prefix=PREFIX_V1)
+# PREFIX_V1 = '/push/api/v1'
+# app.include_router(ws.router, prefix=PREFIX_V1)
+
+
+@app.websocket('/message')
+async def websocket_endpoint(
+    websocket: WebSocket,
+):
+    try:
+        user = await user_msg_service.connect(websocket)
+        while True:
+            await user_msg_service.messaging(user, websocket)
+
+    except WebSocketDisconnect as e:
+        log.error('我要斷線啦 WebSocketDisconnect %s', e)
+        user_msg_service.disconnect(websocket)
 
 
 @app.on_event('startup')
 async def startup_event():
-    subscribe_task = asyncio.create_task(
-        subscribe_messages(local_queue)
+    async_task(
+        subscribe_broadcast_messages(),
+        'sub_broadcast_task',
     )
-    subscribe_task.set_name('subscribe_task')
-    created_async_tasks.add(subscribe_task)
+    
+    async_task(
+        subscribe_unicast_messages(),
+        'sub_unicast_task',
+    )
 
-    period_flush_task = asyncio.create_task(
-        period_flush()
+    async_task(
+        period_flush(),
+        'period_flush_task',
     )
-    period_flush_task.set_name('period_flush_task')
-    created_async_tasks.add(period_flush_task)
 
-    user_msg_consumer_task = asyncio.create_task(
-        user_message_consumer(local_queue)
+    async_task(
+        broadcast_message_consumer(),
+        'broadcast_task',
     )
-    user_msg_consumer_task.set_name('user_msg_consumer_task')
-    created_async_tasks.add(user_msg_consumer_task)
+    
+    async_task(
+        unicast_message_consumer(),
+        'unicast_task',
+    )
 
 
 @app.on_event('shutdown')
