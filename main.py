@@ -1,9 +1,13 @@
 import os
 import asyncio
 from mangum import Mangum
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
-from src.infra.socket.socket_server import *
+from fastapi import (
+    FastAPI,
+    WebSocket,
+    WebSocketDisconnect,
+)
+from src.routers.v1 import ws
+from src.app.tasks import *
 import logging as log
 
 log.basicConfig(filemode='w', level=log.INFO)
@@ -14,6 +18,7 @@ app = FastAPI(
     title='ForeignTeacher: Push Service',
     root_path=root_path,
 )
+
 # app.add_middleware(
 #     CORSMiddleware,
 #     allow_origins=['*'],
@@ -22,78 +27,55 @@ app = FastAPI(
 #     allow_headers=['*'],
 # )
 
+# websocket 以此種方式註冊無效
+# router_v1 = APIRouter(prefix="/push/api/v1")
+# router_v1.include_router(ws.router)
 
-@app.get('/wakeup')
-async def wakeup():
-    return JSONResponse(
-        content={'msg': 'triggered'},
-        status_code=200,
+# websocket 以此種方式註冊有效
+# PREFIX_V1 = '/push/api/v1'
+# app.include_router(ws.router, prefix=PREFIX_V1)
+
+
+@app.websocket('/message')
+async def websocket_endpoint(
+    websocket: WebSocket,
+):
+    try:
+        user = await user_msg_service.connect(websocket)
+        while True:
+            await user_msg_service.messaging(user, websocket)
+
+    except WebSocketDisconnect as e:
+        log.error('我要斷線啦 WebSocketDisconnect %s', e)
+        user_msg_service.disconnect(websocket)
+
+
+@app.on_event('startup')
+async def startup_event():
+    async_task(
+        subscribe_broadcast_messages,
+        'sub_broadcast_task',
+    )
+    
+    async_task(
+        subscribe_unicast_messages,
+        'sub_unicast_task',
     )
 
-# 定义一个 FastAPI 路由，用于返回包含 HTML 页面的响应
+    async_task(
+        period_flush,
+        'period_flush_task',
+    )
 
-
-@app.get('/index')
-async def get_index():
-    return HTMLResponse('''
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <title>Socket.IO Test</title>
-                <script src='https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js'></script>
-                <script>
-                    var socket = io('ws://localhost:8088/sockets');
-                    socket.on('connect', function(sid, environ, auth) {
-                        console.log('Connected');
-                    });
-                    socket.on('disconnect', function(sid) {
-                        console.log('Disconnected');
-                    });
-                    function sendMessage() {
-                        var message = document.getElementById('message').value;
-                        socket.emit('chat_message', message);
-                    }
-                </script>
-            </head>
-            <body>
-                <h1>Socket.IO Test</h1>
-                <input type='text' id='message' placeholder='Enter message'>
-                <button onclick='sendMessage()'>Send Message</button>
-            </body>
-        </html>
-    ''')
-
-
-@app.websocket('/ws/{room_id}')
-async def websocket_endpoint(websocket: WebSocket, room_id: str):
-    # await sio.enter_room(websocket, room_id)
-    # log.info(f'\n\nClient connected: {websocket}')
-    # log.info(f'\n\nwebsocket: {websocket.__dict__}')
-    # log.info(type(websocket))
-    try:
-        await websocket.accept()
-        while True:
-            data = await websocket.receive_json()
-            await websocket.send_json({
-                'data': f'I got you, {room_id}',
-            })
-    except WebSocketDisconnect as e:
-        log.error('我要斷線啦WebSocketDisconnect %s', e)
-        await websocket.close()
-    except Exception as e:
-        log.error('我要斷線啦')
-        # await websocket.close()
-
-
-
-
-# @app.websocket('/')
-# async def websocket_endpoint(websocket: WebSocket, room_id: str):
-#     await websocket.accept()
-#     await sio.enter_room(websocket, room_id)
-#     while True:
-#         data = await websocket.receive_text()
-#         await sio.emit('chat_message', data, room=room_id)
+    async_task(
+        broadcast_message_consumer,
+        'broadcast_task',
+    )
+    
+    async_task(
+        unicast_message_consumer,
+        'unicast_task',
+    )
 
 
 @app.on_event('shutdown')
@@ -103,10 +85,5 @@ async def shutdown_event():
     await cancel_all_tasks()
     await shutdown_services()
 
-
-mount_path = '/'
-app.mount(mount_path, sio_app)
-app.add_route(mount_path, route=sio_app, methods=['GET', 'POST'])
-app.add_websocket_route(mount_path, sio_app)
 
 handler = Mangum(app)

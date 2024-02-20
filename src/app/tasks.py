@@ -1,43 +1,47 @@
 import asyncio
-from typing import Any, Dict, Set, Coroutine
-from ..configs.conf import FLUSH_DURATION
-from ..domains.subscribe.subscribe_service import _subscribe_service
+from typing import Set, Coroutine
+from ..configs.conf import *
+from ..domains.subscribe.subscribe_service import SubscribeService
+from ..domains.message.connection_manager import _connection_manager
 from ..domains.data.user_data_service import _user_data_service
+from .user_message_service import UserMessageService
 import logging as log
 
 log.basicConfig(filemode='w', level=log.INFO)
 
 
-created_async_tasks: Set[asyncio.Task] = set()
+local_broadcast_queue = asyncio.Queue()
+local_unicast_queue = asyncio.Queue()
 
+broadcast_subscriber = SubscribeService()
+unicast_subscriber = SubscribeService()
 
-async def cancel_all_tasks():
-    for async_task in created_async_tasks:
-        try:
-            if not async_task.cancelled():
-                async_task.cancel()
-                await async_task
-        except asyncio.CancelledError as e:
-            log.error('shutdown_event error, %s', e)
-
-        finally:
-            log.info('async task cancelled, %s', async_task.get_name())
-
-
-async def shutdown_services():
-    await _user_data_service.flush()
-
-local_queue = asyncio.Queue()
-
-
-async def subscribe_messages(local_queue: asyncio.Queue):
+# 訂閱者-廣播訊息 (event='receive_msgs')
+async def subscribe_broadcast_messages():
     while True:
-        await _subscribe_service.receive_messages(
-            local_queue,
+        await broadcast_subscriber.receive_messages(
+            local_broadcast_queue,
+            BROADCAST_QUEUE,
         )
-        log.info('subscribe_messages done!')
 
 
+# 訂閱者-單播訊息 (event='receive_msgs')
+async def subscribe_unicast_messages():
+    while True:
+        await unicast_subscriber.receive_messages(
+            local_unicast_queue,
+            UNICAST_QUEUE,
+        )
+
+
+# 定期將 local memory 的資料寫入 DB
+async def period_flush():
+    while True:
+        await asyncio.sleep(FLUSH_DURATION)
+        await _user_data_service.flush()
+
+
+# 消費者
 async def message_consumer(
     local_queue: asyncio.Queue,
     consumer_callback: Coroutine,
@@ -48,64 +52,51 @@ async def message_consumer(
         local_queue.task_done()
 
 
-async def period_flush():
-    while True:
-        await asyncio.sleep(FLUSH_DURATION)
-        await _user_data_service.flush()
+user_msg_service = UserMessageService(
+    _connection_manager,
+    _user_data_service
+)
 
 
-# async def subscribe(sio: AsyncServer, topic: str):
-#     while True:
-#         await asyncio.sleep(2)  # 每隔 N 秒执行一次，模拟定时任务
-#         # 这里编写获取新通知的逻辑
-#         # FIXME: 这里的 new_notification 可能有很多?
-#         try:
-#             role_id, new_notification = _subscribe_service.consume(topic)
-#             await sio.emit(
-#                 event='receive_msgs',
-#                 data={
-#                     'msg': f'Welcome! {role_id}',
-#                     'notify': [new_notification],
-#                     'mode': 'on-line (real-time msg from message queue)',
-#                 },
-#                 room=role_id,  # 为新通知所在的房间
-#             )
-#             # TODO: 千萬別在"廣播"模式下寫入 DB, 會有很多重複的操作!!!
-#             # => RabbitMQ: fanout, 或 Kakfa: no group
-#             # => 廣播
-
-#             # TODO: 什麼情況下可寫入 DB? 用"至多消費一次"模式
-#             # => RabbitMQ: direct, 或 Kakfa: group
-#             # => 個人訂閱
-#             _user_data_service.batch_write_items(new_notification)  # 寫入 DB
-
-#             # 不要急，慢慢來～～～ 寫完 DB 後才 ack
-#             _subscribe_service.ack(topic, new_notification)
-
-#         except Exception as e:
-#             log.error('consume error, %s', e)
+# 消費者-廣播訊息 給相同訂閱頻道的所有用戶
+async def broadcast_message_consumer():
+    await message_consumer(
+        local_broadcast_queue,
+        user_msg_service.broadcast_message,
+    )
 
 
-# async def subscribe_v2(sio: AsyncServer, topic: str):
-#     queue = asyncio.Queue()
-#     await _subscribe_service.consume_task(queue)
-#     while True:
-#         message = await queue.get()
-#         log.info(f"Received message: {message}")
-#         role_id = '1234567890'
-#         await sio.emit(
-#             event='receive_msgs',
-#             data={
-#                 'msg': f'Welcome! {role_id}',
-#                 'notify': [message],
-#                 'mode': 'on-line (real-time msg from message queue)',
-#             },
-#             room=role_id,  # 为新通知所在的房间
-#         )
-#         # TODO: 什麼情況下可寫入 DB? 用"至多消費一次"模式
-#         # => RabbitMQ: direct, 或 Kakfa: group
-#         # => 個人訂閱
-#         _user_data_service.batch_write_items(message)  # 寫入 DB
+# 消費者-單播訊息 短期儲存用戶訊息
+async def unicast_message_consumer():
+    await message_consumer(
+        local_unicast_queue,
+        user_msg_service.short_term_storage_of_data,
+    )
 
-#         # # 不要急，慢慢來～～～ 寫完 DB 後才 ack
-#         # _subscribe_service.ack(topic, message)
+
+created_async_tasks: Set[asyncio.Task] = set()
+
+
+def async_task(task: Coroutine, task_name: str):
+    task: asyncio.Task = asyncio.create_task(
+        task()
+    )
+    task.set_name(task_name)
+    created_async_tasks.add(task)
+
+
+async def cancel_all_tasks():
+    for async_task in created_async_tasks:
+        try:
+            if not async_task.cancelled():
+                async_task.cancel()
+                await async_task
+        except asyncio.CancelledError as e:
+            log.error('async_task_cancelled error, %s', e)
+
+        finally:
+            log.info('async_task_cancelled, %s', async_task.get_name())
+
+
+async def shutdown_services():
+    await _user_data_service.flush()
