@@ -99,7 +99,7 @@ class SubscribeService:
                 while True:
                     try:
                         await mq_channel.basic_consume(
-                            queue=BROADCAST_QUEUE,
+                            queue=queue_name,
                             consumer_callback=callback,
                             no_ack=False,
                             consumer_tag=self.consumer_tag,
@@ -119,7 +119,7 @@ class SubscribeService:
                         await asyncio.sleep(delay)
                         break
 
-            finally:
+            except Exception as e:
                 log.warn(
                     f'\n\n\n receive_messages 任務被強迫取消中 queue: {queue_name}\n\n\n')
                 if mq_channel != None:
