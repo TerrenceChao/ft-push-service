@@ -10,10 +10,10 @@ WS_JSON_MODE = os.getenv("WS_JSON_MODE", "text")  # text or binary
 # message queue
 # RabbitMQ
 RABBITMQ_URL = os.getenv(
-    "RABBITMQ_URL", "amqps://tjztylpc:1u5UI7W5bQJ0QyYIu5moGBalLvxAqVoc@octopus.rmq3.cloudamqp.com/tjztylpc")
+    "RABBITMQ_URL", "amqps://tjztylpc:tBUE0rHgrhN3xnMKWL3lHcu8etA0fDWD@octopus.rmq3.cloudamqp.com/tjztylpc")
 BROADCAST_QUEUE = os.getenv("BROADCAST_QUEUE", "push.broadcast.consumer")
 UNICAST_QUEUE = os.getenv("UNICAST_QUEUE", "push.unicast.worker")
-CONSUME_DURATION = int(os.getenv("CONSUME_DURATION", "20"))  # default 20 secs
+CONSUME_DURATION = int(os.getenv("CONSUME_DURATION", "20"))  # default 2 secs
 FLUSH_DURATION = int(os.getenv("FLUSH_DURATION", "10"))  # default 10 secs
 MAX_BODY_SIZE = int(os.getenv("MAX_BODY_SIZE", 2 * 1024))  # default 2 KB
 
