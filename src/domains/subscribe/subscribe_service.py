@@ -49,26 +49,31 @@ class SubscribeService:
         local_queue: asyncio.Queue,
         queue_name: str,
     ):
-        async with RabbitMQConnection(RABBITMQ_URL) as mq_connect:
-            async with RabbitMQChannel(mq_connect) as mq_channel:
-                await mq_channel.basic_qos(prefetch_count=PREFETCH_SIZE)
-                await mq_channel.queue_declare(queue=queue_name, durable=True)
-                log.info(
-                    f'receive_messages: connected to RabbitMQ. queue: {queue_name}')
+        try:
+            async with RabbitMQConnection(RABBITMQ_URL) as mq_connect:
+                async with RabbitMQChannel(mq_connect) as mq_channel:
+                    await mq_channel.basic_qos(prefetch_count=PREFETCH_SIZE)
+                    await mq_channel.queue_declare(queue=queue_name, durable=True)
+                    log.info(
+                        f'receive_messages: connected to RabbitMQ. queue: {queue_name}')
 
-                async def callback(message: aiormq.abc.DeliveredMessage):
-                    if mq_channel is None:
-                        raise Exception(
-                            f'RabbitMQ channel is None. queue: {queue_name}')
+                    async def callback(message: aiormq.abc.DeliveredMessage):
+                        if mq_channel is None:
+                            raise Exception(
+                                f'RabbitMQ channel is None. queue: {queue_name}')
 
-                    await self.__consumer_callback(message, mq_channel, local_queue)
+                        await self.__consumer_callback(message, mq_channel, local_queue)
 
-                await mq_channel.basic_consume(
-                    queue=queue_name,
-                    consumer_callback=callback,
-                    no_ack=False,
-                    consumer_tag=self.consumer_tag,
-                )
-                while True:
-                    log.info('receive_messages: waiting for messages...')
-                    await asyncio.sleep(CONSUME_DURATION)
+                    await mq_channel.basic_consume(
+                        queue=queue_name,
+                        consumer_callback=callback,
+                        no_ack=False,
+                        consumer_tag=self.consumer_tag,
+                    )
+                    while True:
+                        # log.info('receive_messages: waiting for messages...')
+                        await asyncio.sleep(CONSUME_DURATION)
+
+        except Exception as e:
+            log.error('receive_messages error! queue_name: %s, err: %s',
+                      queue_name, e)
