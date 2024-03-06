@@ -4,6 +4,7 @@ import random
 import asyncio
 import aiormq
 from ...configs.conf import *
+from ...configs.rabbitmq import RabbitMQConnection, RabbitMQChannel
 import logging as log
 
 
@@ -13,24 +14,6 @@ log.basicConfig(filemode='w', level=log.INFO)
 class SubscribeService:
     def __init__(self):
         self.consumer_tag = str(uuid.uuid4())
-
-    async def __connect_channel_check(
-        self,
-        mq_connect: aiormq.abc.AbstractConnection,
-        mq_channel: aiormq.abc.AbstractChannel,
-    ):
-        if mq_connect is None or mq_channel is None:
-            raise Exception('RabbitMQ connection or channel is None.')
-
-        if not mq_connect.is_closed:
-            log.info('RabbitMQ connection is open.')
-        else:
-            raise Exception('RabbitMQ connection is closed.')
-
-        if not mq_channel.is_closed:
-            log.info('RabbitMQ channel is open and active.')
-        else:
-            raise Exception('RabbitMQ channel is closed or inactive.')
 
     async def __consumer_callback(
         self,
@@ -66,28 +49,12 @@ class SubscribeService:
         local_queue: asyncio.Queue,
         queue_name: str,
     ):
-        mq_connect: aiormq.abc.AbstractConnection = None
-        mq_channel: aiormq.abc.AbstractChannel = None
-
-        retry_delay = 1
-        max_retry_attempts = 5
-        retry_attempt = 0
-
-        while True:  # 永遠嘗試連線
-            if retry_attempt >= max_retry_attempts:
-                log.info('Max retry attempts reached, waiting before retrying...')
-                await asyncio.sleep(retry_delay)
-                retry_attempt = 0  # 重置重試計數器
-                continue
-            try:
-                mq_connect = await aiormq.connect(RABBITMQ_URL)
-                log.info(
-                    f'receive_messages: connected to RabbitMQ. queue: {queue_name}')
-
-                mq_channel = await mq_connect.channel()
+        async with RabbitMQConnection(RABBITMQ_URL) as mq_connect:
+            async with RabbitMQChannel(mq_connect) as mq_channel:
                 await mq_channel.basic_qos(prefetch_count=PREFETCH_SIZE)
                 await mq_channel.queue_declare(queue=queue_name, durable=True)
-                log.info(f'receive_messages: declared queue: {queue_name}')
+                log.info(
+                    f'receive_messages: connected to RabbitMQ. queue: {queue_name}')
 
                 async def callback(message: aiormq.abc.DeliveredMessage):
                     if mq_channel is None:
@@ -96,33 +63,12 @@ class SubscribeService:
 
                     await self.__consumer_callback(message, mq_channel, local_queue)
 
+                await mq_channel.basic_consume(
+                    queue=queue_name,
+                    consumer_callback=callback,
+                    no_ack=False,
+                    consumer_tag=self.consumer_tag,
+                )
                 while True:
-                    try:
-                        await mq_channel.basic_consume(
-                            queue=BROADCAST_QUEUE,
-                            consumer_callback=callback,
-                            no_ack=False,
-                            consumer_tag=self.consumer_tag,
-                        )
-                        # 保持运行一段时间以接收消息
-                        await asyncio.sleep(CONSUME_DURATION)
-                        await self.__connect_channel_check(mq_connect, mq_channel)
-
-                    except Exception as e:
-                        log.error(
-                            'An error occurred while subscribing: %s, %s', queue_name, e)
-                        retry_attempt += 1
-                        delay = retry_delay * 2**retry_attempt + \
-                            random.uniform(-0.5, 0.5)
-                        log.warning(
-                            f'Retrying in {delay} seconds...  queue: {queue_name}')
-                        await asyncio.sleep(delay)
-                        break
-
-            finally:
-                log.warn(
-                    f'\n\n\n receive_messages 任務被強迫取消中 queue: {queue_name}\n\n\n')
-                if mq_channel != None:
-                    await mq_channel.close()
-                if mq_connect != None:
-                    await mq_connect.close()
+                    log.info('receive_messages: waiting for messages...')
+                    await asyncio.sleep(CONSUME_DURATION)
