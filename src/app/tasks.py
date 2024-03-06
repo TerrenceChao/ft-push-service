@@ -18,18 +18,20 @@ unicast_subscriber = SubscribeService()
 
 # 訂閱者-廣播訊息 (event='receive_msgs')
 async def subscribe_broadcast_messages():
-    await broadcast_subscriber.receive_messages(
-        local_broadcast_queue,
-        BROADCAST_QUEUE,
-    )
+    while True:
+        await broadcast_subscriber.receive_messages(
+            local_broadcast_queue,
+            BROADCAST_QUEUE,
+        )
 
 
 # 訂閱者-單播訊息 (event='receive_msgs')
 async def subscribe_unicast_messages():
-    await unicast_subscriber.receive_messages(
-        local_unicast_queue,
-        UNICAST_QUEUE,
-    )
+    while True:
+        await unicast_subscriber.receive_messages(
+            local_unicast_queue,
+            UNICAST_QUEUE,
+        )
 
 
 # 定期將 local memory 的資料寫入 DB
